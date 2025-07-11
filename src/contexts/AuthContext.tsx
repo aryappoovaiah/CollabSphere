@@ -1,13 +1,13 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signOut, 
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
   onAuthStateChanged,
   signInWithPopup,
-  updateProfile,
-  User
+  updateProfile
 } from 'firebase/auth';
+import type { User } from 'firebase/auth';
 import { auth, githubProvider, googleProvider } from '../firebase/config';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -80,7 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, (user: User | null) => {
       setCurrentUser(user);
       setLoading(false);
     });

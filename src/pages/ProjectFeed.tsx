@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Users, BookOpen } from 'lucide-react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import type { QueryDocumentSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../contexts/AuthContext';
 import { toastStore } from '../components/ui/Toaster';
@@ -27,6 +28,23 @@ const ProjectFeed = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState<'all' | 'women'>('all');
   const { currentUser } = useAuth();
+  const [userCollege, setUserCollege] = useState<string | null>(null);
+  const [showMyCollege, setShowMyCollege] = useState(false);
+
+  useEffect(() => {
+    if (currentUser) {
+      const fetchCollege = async () => {
+        const profileRef = doc(db, 'profiles', currentUser.uid);
+        const profileSnap = await getDoc(profileRef);
+        if (profileSnap.exists()) {
+          setUserCollege(profileSnap.data().college || null);
+        }
+      };
+      fetchCollege();
+    } else {
+      setUserCollege(null);
+    }
+  }, [currentUser]);
 
   useEffect(() => {
     fetchProjects();
@@ -45,7 +63,7 @@ const ProjectFeed = () => {
       const q = constraints.length > 0 ? query(projectQuery, ...constraints) : query(projectQuery);
       const querySnapshot = await getDocs(q);
       
-      const projectData = querySnapshot.docs.map(doc => ({
+      const projectData = querySnapshot.docs.map((doc: { id: string; data: () => any }) => ({
         id: doc.id,
         ...doc.data()
       })) as Project[];
@@ -59,11 +77,22 @@ const ProjectFeed = () => {
     }
   };
 
-  const filteredProjects = projects.filter(project =>
-    project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    project.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    project.skills.some(skill => skill.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredProjects = projects.filter(project => {
+    if (showMyCollege && userCollege && filter === 'women') {
+      return project.college === userCollege && project.isWomenLed;
+    }
+    if (showMyCollege && userCollege) {
+      return project.college === userCollege;
+    }
+    if (filter === 'women') {
+      return project.isWomenLed;
+    }
+    return (
+      project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      project.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      project.skills.some(skill => skill.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+  });
 
   const handleSearch = () => {
     fetchProjects();
@@ -71,14 +100,23 @@ const ProjectFeed = () => {
 
   return (
     <div className="py-10 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-bold">Browse Projects</h1>
-          <p className="text-gray-400 mt-1">Find collaborations that match your skills and interests</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8 gap-4">
+        <h1 className="text-3xl font-bold">Project Feed</h1>
+        <div className="flex gap-2">
+          <button
+            className={`btn ${showMyCollege ? 'btn-secondary' : 'btn-primary'}`}
+            onClick={() => setShowMyCollege(false)}
+          >
+            All Projects
+          </button>
+          <button
+            className={`btn ${showMyCollege ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setShowMyCollege(true)}
+            disabled={!currentUser || !userCollege}
+          >
+            My College
+          </button>
         </div>
-        <Link to="/post-project" className="btn btn-primary mt-4 md:mt-0">
-          Post a project
-        </Link>
       </div>
 
       <div className="bg-background-lighter rounded-xl p-4 mb-8">
@@ -120,15 +158,18 @@ const ProjectFeed = () => {
         </div>
       </div>
 
+      {showMyCollege && !userCollege && (
+        <div className="text-yellow-400 mb-4">You must be logged in and have a college set in your profile to use this feature.</div>
+      )}
+
       {loading ? (
         <div className="text-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-light mx-auto"></div>
           <p className="mt-4 text-gray-400">Loading projects...</p>
         </div>
       ) : filteredProjects.length === 0 ? (
-        <div className="text-center py-16">
-          <h2 className="text-xl font-bold mb-2">No projects found</h2>
-          <p className="text-gray-400">Try adjusting your search or filters</p>
+        <div className="text-gray-400 text-center py-12">
+          {showMyCollege ? 'No projects found from your college.' : 'No projects found.'}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
